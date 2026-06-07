@@ -46,6 +46,15 @@ for dir in /app /app/data /app/logs; do
     fi
 done
 
+# Expose nvcc to flashinfer/vllm. The nvidia-cuda-toolkit pip package
+# installs nvcc under site-packages but flashinfer's JIT builder looks
+# for CUDA at /usr/local/cuda. Create a symlink when the package is
+# present and the system path is absent.
+_CUDA_PKG=$(find /app/.local/lib/python3.12/site-packages/nvidia -maxdepth 1 -name 'cuda_nvcc' -type d 2>/dev/null | head -n 1)
+if [ -n "$_CUDA_PKG" ] && [ ! -e /usr/local/cuda ]; then
+    ln -s "$_CUDA_PKG" /usr/local/cuda
+fi
+
 # Drop root and run the actual app. `gosu` is preferred over `su` /
 # `sudo` because it cleans up the process tree (no extra shell layer)
 # so signals (SIGTERM from `docker stop`) reach uvicorn directly.
