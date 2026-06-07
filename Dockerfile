@@ -1,4 +1,10 @@
-FROM python:3.12-slim
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+# Allow pip to install into the system Python inside a Docker container.
+# Ubuntu 24.04 enforces PEP 668 by default; this flag mirrors the old
+# behaviour that python:3.12-slim had (no venv required in an image).
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # System deps. tmux is required by Cookbook for background downloads/serves.
 # openssh-client is required for Cookbook remote server tests, setup, probes,
@@ -8,6 +14,8 @@ FROM python:3.12-slim
 # nodejs/npm provide npx for the optional built-in Browser MCP server.
 # gosu lets the entrypoint drop privileges cleanly so signals still reach
 # uvicorn directly (no extra shell layer like `su`/`sudo` would add).
+# Python 3.12 is the default on Ubuntu 24.04; python3-dev and python3-pip
+# add the headers and pip installer.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -18,13 +26,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     openssh-client \
     gosu \
+    python3.12 \
+    python3.12-dev \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Ensure `python` and `python3` resolve to 3.12.
+RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python3.12 1 \
+ && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
 WORKDIR /app
 
 # Install Python deps first (layer cache)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy app code
 COPY . .
