@@ -2,7 +2,7 @@ services:
   odysseus:
     build: .
     ports:
-      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-7000}:7000"
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-7000}:7000"
     volumes:
       - ${APP_DATA_DIR:-./data}:/app/data:z
       - ${APP_LOGS_DIR:-./logs}:/app/logs:z
@@ -161,6 +161,37 @@ services:
       - ntfy-cache:/var/cache/ntfy
     environment:
       - NTFY_BASE_URL=${NTFY_BASE_URL:-http://localhost:8091}
+    restart: unless-stopped
+
+  # Optional standalone vLLM service for local model serving (separate from
+  # Cookbook's in-container serving). Start with:
+  #   docker compose --profile llm up -d
+  # Model is set via VLLM_MODEL in .env. After it loads, add
+  # http://vllm:8000/v1 as an endpoint in Settings -> Model Endpoints.
+  vllm:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${APP_DATA_DIR:-./data}/huggingface:/root/.cache/huggingface:z
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+    command: >-
+      --model ${VLLM_MODEL:-cyankiwi/ERNIE-4.5-21B-A3B-Thinking-AWQ-4bit}
+      --trust-remote-code
+      --max-model-len ${VLLM_MAX_LEN:-8192}
+      --max-num-seqs 8
+      --gpu-memory-utilization 0.90
+    profiles:
+      - llm
     restart: unless-stopped
 
 volumes:
